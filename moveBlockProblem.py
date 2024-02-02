@@ -1,6 +1,6 @@
+import tkinter as tk
+from tkinter import ttk
 import random
-from queue import Queue, LifoQueue, PriorityQueue
-
 
 class Heuristics:
     @staticmethod
@@ -18,7 +18,6 @@ class Heuristics:
             return 1
 
         return 1
-
 
 class MoveBlockNode:
     def __init__(self, state, cost, actions, blocking_blocks_positions):
@@ -80,35 +79,47 @@ class MoveBlockProblem:
 
         return blocking_blocks_positions
 
+    def perform_action(self, action):
+        if action == 'left':
+            self.initial_state = self.result(self.initial_state, 'left')
+        elif action == 'right':
+            self.initial_state = self.result(self.initial_state, 'right')
+        elif action == 'up':
+            self.initial_state = self.result(self.initial_state, 'up')
+        elif action == 'down':
+            self.initial_state = self.result(self.initial_state, 'down')
+
     def is_valid_state(self, state):
         x, y = state
         return 0 <= x < self.width and 0 <= y < self.height and state not in self.blocking_blocks_positions
 
     def bfs(self):
-        return self.search(Queue())
+        return self.search()
 
     def dfs(self):
-        return self.search(LifoQueue())
+        return self.search()
 
     def ucs(self):
-        return self.search(PriorityQueue(), ucs=True)
+        return self.search(ucs=True)
 
     def astar(self, heuristic):
-        return self.search(PriorityQueue(), ucs=True, heuristic=heuristic)
+        return self.search(ucs=True, heuristic=heuristic)
 
     def greedy(self, heuristic):
-        return self.search(PriorityQueue(), heuristic=heuristic)
+        return self.search(heuristic=heuristic)
 
-    def search(self, frontier, ucs=False, heuristic=None):
+    def search(self, ucs=False, heuristic=None):
         explored = set()
         start_node = MoveBlockNode(self.initial_state, 0, [], self.blocking_blocks_positions)
-        frontier.put((0, start_node))
+        frontier = [start_node]
 
         initial_blocking_blocks_positions = self.blocking_blocks_positions.copy()
         blocking_blocks_positions = initial_blocking_blocks_positions.copy()
 
-        while not frontier.empty():
-            current_priority, current_node = frontier.get()
+        while frontier:
+            frontier.sort(key=lambda x: x.cost, reverse=True) if ucs else frontier.sort(key=lambda x: x.cost + heuristic(x.state, self.goal_position) if heuristic else 0, reverse=True)
+            current_node = frontier.pop()
+
             current_state = current_node.state
 
             print("Exploring state:", current_state, "with actions:", current_node.actions, "and cost:", current_node.cost)
@@ -143,8 +154,8 @@ class MoveBlockProblem:
                 priority = cost + heuristic_value
 
                 if next_state not in explored and self.is_valid_state(next_state):
-                    next_node = MoveBlockNode(next_state, cost, current_node.actions + [action],  next_blocking_blocks_positions)
-                    frontier.put((priority, next_node))
+                    next_node = MoveBlockNode(next_state, cost, current_node.actions + [action], next_blocking_blocks_positions)
+                    frontier.append(next_node)
 
         return None, None, None, None
 
@@ -174,47 +185,124 @@ class MoveBlockProblem:
 
         return blocking_blocks_positions
 
+class MoveBlockGUI(tk.Tk):
+    def __init__(self, master=None):
+        tk.Tk.__init__(self)
+        self.move_block_problem = None
+        self.algorithm = None
+        self.heuristic_function = None
 
-# Problem Definition
-width = 8
-height = 7
-initial_state = (0, 3)
-goal_position = (7, 4)
-num_blocking_blocks = 3
+        self.title("Move Block Puzzle Solver")
+        self.geometry("800x600")
 
-move_block_problem = MoveBlockProblem(width, height, initial_state, goal_position, num_blocking_blocks)
+        self.algorithm_var = tk.StringVar()
+        self.heuristic_var = tk.StringVar()
 
+        self.create_algorithm_selection()
+        self.create_heuristic_selection()
+        self.create_solve_button()
+        self.create_canvas()  # Create canvas once
 
-# Select Algorithm
-# algorithm = 'bfs'
-algorithm = 'dfs'
-# algorithm = 'ucs'
-# algorithm = 'greedy'
-# algorithm = 'astar'
+    def create_algorithm_selection(self):
+        label = tk.Label(self, text="Select Algorithm:")
+        label.pack(pady=10)
 
-# heuristic_function = Heuristics.misplaced_blocks
-# heuristic_function = Heuristics.manhattan_distance
+        algorithm_options = ['BFS', 'DFS', 'UCS', 'Greedy', 'A*']
+        algorithm_combobox = ttk.Combobox(self, textvariable=self.algorithm_var, values=algorithm_options)
+        algorithm_combobox.set(algorithm_options[0])
+        algorithm_combobox.pack()
 
-if algorithm == 'bfs':
-    result = move_block_problem.bfs()
-elif algorithm == 'dfs':
-    result = move_block_problem.dfs()
-elif algorithm == 'ucs':
-    result = move_block_problem.ucs()
-elif algorithm == 'greedy' or algorithm == 'astar':
-    result = move_block_problem.greedy(heuristic_function) if algorithm == 'greedy' else move_block_problem.astar(heuristic_function)
-else:
-    print("Invalid algorithm")
+    def create_heuristic_selection(self):
+        label = tk.Label(self, text="Select Heuristic (for Greedy and A*):")
+        label.pack(pady=10)
 
-if result:
-    actions, cost, initial_blocking_blocks, blocking_blocks_positions = result
-    if actions is not None:
-        total_cost = sum(cost for _ in actions)  # Calculate total cost
-        print(f"{algorithm.upper()}: Goal reached with actions {actions}")
-        print(f"Total cost to reach goal is {total_cost}")
-    else:
-        print(f"{algorithm.upper()}: Goal reached with no actions.")
-    print(f"Initial blocking block positions: {initial_blocking_blocks}")
-    print(f"Final blocking block positions: {blocking_blocks_positions}")
-else:
-    print(f"{algorithm.upper()}: Goal not reachable.")
+        heuristic_options = ['Manhattan Distance', 'Misplaced Blocks']
+        heuristic_combobox = ttk.Combobox(self, textvariable=self.heuristic_var, values=heuristic_options)
+        heuristic_combobox.set(heuristic_options[0])
+        heuristic_combobox.pack()
+
+    def create_solve_button(self):
+        solve_button = ttk.Button(self, text="Solve Puzzle", command=self.solve_puzzle)
+        solve_button.pack(pady=20)
+
+    def create_canvas(self):
+        self.canvas = tk.Canvas(self, width=600, height=600, bg="white")
+        self.canvas.pack()
+
+    def solve_puzzle(self):
+        width = 8
+        height = 8
+        initial_state = (random.randint(0, 7), random.randint(0, 7))
+        goal_position = (random.randint(0, 7), random.randint(0, 7))
+        num_blocking_blocks = random.randint(0, 8)  # Adjust as needed
+
+        self.move_block_problem = MoveBlockProblem(width, height, initial_state, goal_position, num_blocking_blocks)
+
+        self.algorithm = self.algorithm_var.get().lower()
+        if self.algorithm in ['greedy', 'astar']:
+            heuristic_option = self.heuristic_var.get()
+            self.heuristic_function = getattr(Heuristics, heuristic_option.lower().replace(" ", "_"))
+
+        if self.algorithm == 'bfs':
+            result = self.move_block_problem.bfs()
+        elif self.algorithm == 'dfs':
+            result = self.move_block_problem.dfs()
+        elif self.algorithm == 'ucs':
+            result = self.move_block_problem.ucs()
+        elif self.algorithm in ['greedy', 'astar']:
+            result = self.move_block_problem.greedy(self.heuristic_function)
+        else:
+            print("Invalid algorithm")
+            return
+
+        if result:
+            actions, cost, initial_blocking_blocks, blocking_blocks_positions = result
+            self.animate_moves(actions)
+            total_cost = sum(cost for _ in actions)
+            self.draw_grid()  # Ensure the final grid is displayed
+            self.after(500, lambda: self.show_info_dialog(f"{self.algorithm.upper()}",
+                                                          f"Goal reached with actions {actions}\nTotal cost to reach goal is {total_cost}"))
+            self.after(1000, lambda: self.show_info_dialog("Blocking Block Positions",
+                                                           f"Initial blocking block positions: {initial_blocking_blocks}\nFinal blocking block positions: {blocking_blocks_positions}"))
+
+    def show_info_dialog(self, title, message):
+        print(title + ":", message)
+
+    def animate_moves(self, actions):
+        self.move_block_problem = MoveBlockProblem(width, height, initial_state, goal_position, num_blocking_blocks)
+        self.draw_grid()
+
+        def animate(step=iter(actions)):
+            try:
+                action = next(step)
+                self.move_block_problem.perform_action(action)
+                self.draw_grid()
+                self.after(500, animate, step)
+            except StopIteration:
+                pass
+
+        animate()
+
+    def draw_grid(self):
+        self.canvas.delete("all")
+        cell_size = 600 // self.move_block_problem.width
+        for x in range(self.move_block_problem.width):
+            for y in range(self.move_block_problem.height):
+                color = "white"
+                if (x, y) == self.move_block_problem.goal_position:
+                    color = "blue"
+                elif (x, y) in self.move_block_problem.blocking_blocks_positions:
+                    color = "red"
+                self.canvas.create_rectangle(x * cell_size, y * cell_size, (x + 1) * cell_size,
+                                             (y + 1) * cell_size, fill=color)
+
+if __name__ == "__main__":
+    width = 8
+    height = 8
+    initial_state = (random.randint(0, 7), random.randint(0, 7))
+    goal_position = (random.randint(0, 7), random.randint(0, 7))
+    num_blocking_blocks = random.randint(0, 8)  # Adjust as needed
+
+    app = MoveBlockGUI()
+    app.move_block_problem = MoveBlockProblem(width, height, initial_state, goal_position, num_blocking_blocks)
+    app.mainloop()
