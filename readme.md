@@ -56,6 +56,3 @@ In this problem, BFS and UCS have the same cost and nodes explored. DFS has a lo
 
 3. Follow the prompts to input the initial and goal states, and the script will output the solution path and cost.
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
